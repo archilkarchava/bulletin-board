@@ -1,7 +1,7 @@
 {
   "name": "@bulletin-board/client",
   "version": "1.0.0",
-  "description": "Service-Oriented Architectures Lab 2",
+  "description": "Service-Oriented Architectures Lab 2 client",
   "author": "Archil Karchava",
   "license": "MIT",
   "dependencies": {
