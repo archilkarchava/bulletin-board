@@ -1,0 +1,28 @@
+{
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "google-protobuf": "^3.10.0",
+    "grpc": "^1.24.2"
+  },
+  "devDependencies": {
+    "concurrently": "^5.0.0",
+    "@types/google-protobuf": "^3.7.2",
+    "grpc-tools": "^1.8.0",
+    "grpc_tools_node_protoc_ts": "^2.5.5"
+  },
+  "scripts": {
+    "generate": "sh ./scripts/generate.sh",
+    "dev:client": "yarn workspace @bulletin-board/client dev",
+    "dev:server": "yarn workspace @bulletin-board/server dev",
+    "dev": "concurrently \"yarn dev:client\" \"yarn dev:server\"",
+    "build:client": "yarn workspace @bulletin-board/client build",
+    "build:server": "yarn workspace @bulletin-board/server build",
+    "build": "concurrently \"yarn build:client\" \"yarn build:server\"",
+    "start:client": "yarn workspace @bulletin-board/client start",
+    "start:server": "yarn workspace @bulletin-board/server start",
+    "start": "concurrently \"yarn start:client\" \"yarn start:server\""
+  }
+}
