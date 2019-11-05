@@ -1,6 +1,7 @@
 #! /bin/env sh
 
 mkdir -p ./generated
+rm ./generated/*
 
 yarn run grpc_tools_node_protoc \
 --js_out=import_style=commonjs,binary:./generated \

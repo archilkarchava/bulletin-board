@@ -1,0 +1,35 @@
+[
+  {
+    "name": "development",
+    "type": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "username": "bulletin",
+    "password": "bulletin",
+    "database": "bulletin",
+    "synchronize": true,
+    "logging": false,
+    "entities": ["src/entity/**/*.ts"],
+    "migrations": ["src/migration/*.ts"],
+    "subscribers": ["src/subscriber/**/*.ts"],
+    "cli": {
+      "entitiesDir": "src/entity",
+      "migrationsDir": "src/migration",
+      "subscribersDir": "src/subscriber"
+    }
+  },
+  {
+    "name": "production",
+    "type": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "username": "bulletin",
+    "password": "bulletin",
+    "database": "bulletin",
+    "synchronize": false,
+    "logging": false,
+    "entities": ["build/entity/**/*.js"],
+    "migrations": ["build/migration/**/*.js"],
+    "subscribers": ["build/subscriber/**/*.js"]
+  }
+]

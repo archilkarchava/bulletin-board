@@ -1,28 +1,33 @@
 {
-  "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
+  "name": "bulletin-board",
+  "version": "1.0.0",
+  "description": "Service-Oriented Architectures Lab 2",
+  "author": "Archil Karchava",
+  "license": "MIT",
   "dependencies": {
     "google-protobuf": "^3.10.0",
-    "grpc": "^1.24.2"
+    "grpc": "^1.24.2",
+    "pg": "^7.12.1",
+    "pg-query-stream": "^2.0.1",
+    "reflect-metadata": "^0.1.13",
+    "typeorm": "^0.2.20"
   },
   "devDependencies": {
-    "concurrently": "^5.0.0",
     "@types/google-protobuf": "^3.7.2",
+    "@types/node": "^12.12.5",
+    "cross-env": "^6.0.3",
     "grpc-tools": "^1.8.0",
-    "grpc_tools_node_protoc_ts": "^2.5.5"
+    "grpc_tools_node_protoc_ts": "^2.5.5",
+    "nodemon": "^1.19.4",
+    "ts-node": "^8.4.1",
+    "typescript": "^3.6.4"
   },
   "scripts": {
-    "generate": "sh ./scripts/generate.sh",
-    "dev:client": "yarn workspace @bulletin-board/client dev",
-    "dev:server": "yarn workspace @bulletin-board/server dev",
-    "dev": "concurrently \"yarn dev:client\" \"yarn dev:server\"",
-    "build:client": "yarn workspace @bulletin-board/client build",
-    "build:server": "yarn workspace @bulletin-board/server build",
-    "build": "concurrently \"yarn build:client\" \"yarn build:server\"",
-    "start:client": "yarn workspace @bulletin-board/client start",
-    "start:server": "yarn workspace @bulletin-board/server start",
-    "start": "concurrently \"yarn start:client\" \"yarn start:server\""
+    "dev:server": "cross-env NODE_ENV=development nodemon --ignore src/client.ts --exec ts-node src/server.ts",
+    "dev:client": "cross-env NODE_ENV=development ts-node src/client.ts",
+    "build": "tsc",
+    "start:server": "cross-env NODE_ENV=production node build/server.js",
+    "start:client": "cross-env NODE_ENV=production node build/client.js",
+    "generate": "sh ./scripts/generate.sh"
   }
 }

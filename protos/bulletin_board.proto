@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package bulletinboard;
+
+service BulletinBoard {
+  rpc ListBulletins(Empty) returns (stream Bulletin);
+  rpc ListBulletinsByUser(UserId) returns (stream Bulletin);
+  rpc CreateBulletin(NewBulletin) returns (Result);
+  rpc UpdateBulletin(UpdatedBulletin) returns (Result);
+  rpc DeleteBulletin(BulletinId) returns (Result);
+}
+
+message User {
+  string name = 1;
+  string email = 2;
+  int64 id = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message UserId { int64 id = 1; }
+
+message Bulletin {
+  string title = 1;
+  string text = 2;
+  User user = 3;
+  int64 id = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message BulletinId { int64 id = 1; }
+
+message UpdatedBulletin {
+  string title = 1;
+  string text = 2;
+  int64 id = 4;
+}
+
+message NewBulletin {
+  string title = 1;
+  string text = 2;
+  User user = 3;
+}
+
+message Result {
+  string status = 1;
+  string error_msg = 2;
+}
+
+message Empty {}
