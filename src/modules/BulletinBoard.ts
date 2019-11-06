@@ -1,17 +1,25 @@
 import * as grpc from "grpc";
+import { Subscriber } from "pg-listen";
 import { getRepository } from "typeorm";
 import * as messages from "../../generated/bulletin_board_pb";
 import { Bulletin } from "../entity/Bulletin";
 import { User } from "../entity/User";
 
 export class BulletinBoard {
-  static create: grpc.handleUnaryCall<
-    messages.NewBulletin,
-    messages.Result
-  > = async (call, callback) => {
+  pgSubscriber: Subscriber;
+  constructor(pgSubscriber: Subscriber) {
+    this.pgSubscriber = pgSubscriber;
+  }
+
+  create: grpc.handleUnaryCall<messages.NewBulletin, messages.Result> = async (
+    call,
+    callback
+  ) => {
     const result = new messages.Result();
+    const bulletinRepository = getRepository(Bulletin);
+    const bulletinRequest = call.request;
     const userRepository = getRepository(User);
-    const userRequest = call.request.getUser();
+    const userRequest = bulletinRequest.getUser();
     let user = new User();
     user.id = userRequest.getId();
     user.name = userRequest.getName();
@@ -19,15 +27,20 @@ export class BulletinBoard {
     if (await userRepository.findOne(userRequest.getId())) {
       user = await userRepository.findOne(userRequest.getId());
     } else {
+      if (!(user.name.length > 0 && user.email.length > 0)) {
+        result.setStatus("error");
+        result.setErrorMsg("User with this ID does not exist.");
+        callback(null, result);
+      }
       user = await userRepository.save(user);
     }
     try {
-      const bulletinRepository = getRepository(Bulletin);
       const bulletin = new Bulletin();
-      bulletin.title = call.request.getTitle();
-      bulletin.text = call.request.getText();
+      bulletin.title = bulletinRequest.getTitle();
+      bulletin.text = bulletinRequest.getText();
       bulletin.user = user;
       await bulletinRepository.insert(bulletin);
+      await this.pgSubscriber.notify("create-channel", bulletin);
       result.setStatus("success");
       callback(null, result);
     } catch (err) {
@@ -37,7 +50,7 @@ export class BulletinBoard {
     }
   };
 
-  static update: grpc.handleUnaryCall<
+  update: grpc.handleUnaryCall<
     messages.UpdatedBulletin,
     messages.Result
   > = async (call, callback) => {
@@ -58,6 +71,11 @@ export class BulletinBoard {
       );
       if (queryResult.affected) {
         result.setStatus("success");
+        const updatedBulletin = await bulletinRepository.findOne(
+          bulletinUpdate.getId(),
+          { relations: ["user"] }
+        );
+        await this.pgSubscriber.notify("update-channel", updatedBulletin);
       } else {
         result.setStatus("error");
         result.setErrorMsg("Bulletin with this id does not exist.");
@@ -70,16 +88,17 @@ export class BulletinBoard {
     }
   };
 
-  static delete: grpc.handleUnaryCall<
-    messages.BulletinId,
-    messages.Result
-  > = async (call, callback) => {
+  delete: grpc.handleUnaryCall<messages.BulletinId, messages.Result> = async (
+    call,
+    callback
+  ) => {
     const bulletinId = call.request.getId();
     const result = new messages.Result();
     const bulletinRepository = getRepository(Bulletin);
     try {
       if ((await bulletinRepository.delete(bulletinId)).affected) {
         result.setStatus("success");
+        await this.pgSubscriber.notify("delete-channel", bulletinId);
         callback(null, result);
       } else {
         result.setStatus("error");
@@ -92,65 +111,88 @@ export class BulletinBoard {
     }
   };
 
-  static listByUser: grpc.handleServerStreamingCall<
-    messages.UserId,
-    messages.Bulletin
-  > = async (call) => {
+  _list = async (call, userId?: number) => {
+    await Promise.all([
+      this.pgSubscriber.listenTo("create-channel"),
+      this.pgSubscriber.listenTo("update-channel"),
+      this.pgSubscriber.listenTo("delete-channel")
+    ]);
     const bulletinRepository = getRepository(Bulletin);
-    const userId = call.request.getId();
-    const bulletins = await bulletinRepository.find({
-      where: { user: { id: userId } },
-      relations: ["user"]
-    });
-    for (const bulletin of bulletins) {
-      const bulletinResponse = new messages.Bulletin();
-      bulletinResponse.setId(bulletin.id);
-      bulletinResponse.setTitle(bulletin.title);
-      bulletinResponse.setText(bulletin.text);
-      const userResponse = new messages.User();
-      userResponse.setId(bulletin.user.id);
-      userResponse.setName(bulletin.user.name);
-      userResponse.setEmail(bulletin.user.email);
-      bulletinResponse.setUser(userResponse);
-      call.write(bulletinResponse);
+    try {
+      const stream = userId
+        ? await bulletinRepository
+            .createQueryBuilder("bulletin")
+            .leftJoinAndSelect("bulletin.user", "user")
+            .where("user.id = :id", { id: userId })
+            .stream()
+        : await bulletinRepository
+            .createQueryBuilder("bulletin")
+            .leftJoinAndSelect("bulletin.user", "user")
+            .stream();
+      stream.on("data", (data) => {
+        const bulletinResponse = new messages.Bulletin();
+        const userResponse = new messages.User();
+        bulletinResponse.setId(data.bulletin_id);
+        bulletinResponse.setTitle(data.bulletin_title);
+        bulletinResponse.setText(data.bulletin_text);
+        userResponse.setId(data.user_id);
+        userResponse.setName(data.user_name);
+        userResponse.setEmail(data.user_email);
+        bulletinResponse.setUser(userResponse);
+        call.write(bulletinResponse);
+      });
+      this.pgSubscriber.notifications.on(
+        "create-channel",
+        (bulletin: Bulletin) => {
+          console.log("created bulletin:", bulletin.id);
+          const bulletinResponse = new messages.Bulletin();
+          const userResponse = new messages.User();
+          bulletinResponse.setId(bulletin.id);
+          bulletinResponse.setTitle(bulletin.title);
+          bulletinResponse.setText(bulletin.text);
+          userResponse.setId(bulletin.user.id);
+          userResponse.setName(bulletin.user.name);
+          userResponse.setEmail(bulletin.user.email);
+          bulletinResponse.setUser(userResponse);
+          call.write(bulletinResponse);
+        }
+      );
+      this.pgSubscriber.notifications.on(
+        "update-channel",
+        (bulletin: Bulletin) => {
+          console.log("updated bulletin:", bulletin.id);
+          const bulletinResponse = new messages.Bulletin();
+          const userResponse = new messages.User();
+          bulletinResponse.setId(bulletin.id);
+          bulletinResponse.setTitle(bulletin.title);
+          bulletinResponse.setText(bulletin.text);
+          userResponse.setId(bulletin.user.id);
+          userResponse.setName(bulletin.user.name);
+          userResponse.setEmail(bulletin.user.email);
+          bulletinResponse.setUser(userResponse);
+          call.write(bulletinResponse);
+        }
+      );
+      this.pgSubscriber.notifications.on("delete-channel", (id: number) => {
+        console.log(`Bulletin with id: ${id} has been deleted`);
+      });
+    } catch (err) {
+      call.write(null, err.toString());
     }
   };
 
-  static list: grpc.handleServerStreamingCall<
+  list: grpc.handleServerStreamingCall<
     messages.Empty,
     messages.Bulletin
   > = async (call) => {
-    const bulletinRepository = getRepository(Bulletin);
-    const bulletins = await bulletinRepository.find({ relations: ["user"] });
-    // const s = await bulletinRepository
-    //   .createQueryBuilder("bulletin")
-    //   // .where("bulletin.userId = :id", { id: 3 })
-    //   .select()
-    //   .stream();
-    // s.on("data", (data) => {
-    //   console.log(JSON.stringify(data, null, 2));
-    // });
-    // const s = await queryRunner.stream(`SELECT * FROM bulletin`);
-    // s.on("data", (data) => {
-    //   console.log(data);
-    // });
-    // s.on("end", () => {
-    //   queryRunner.release();
-    // });
-    // s.on("error", () => {
-    //   queryRunner.release();
-    // });
-    for (const bulletin of bulletins) {
-      const bulletinResponse = new messages.Bulletin();
-      bulletinResponse.setId(bulletin.id);
-      bulletinResponse.setTitle(bulletin.title);
-      bulletinResponse.setText(bulletin.text);
-      const userResponse = new messages.User();
-      userResponse.setId(bulletin.user.id);
-      userResponse.setName(bulletin.user.name);
-      userResponse.setEmail(bulletin.user.email);
-      bulletinResponse.setUser(userResponse);
-      call.write(bulletinResponse);
-    }
+    await this._list(call);
+  };
+
+  listByUser: grpc.handleServerStreamingCall<
+    messages.UserId,
+    messages.Bulletin
+  > = async (call) => {
+    const userId = call.request.getId();
+    await this._list(call, userId);
   };
 }

@@ -8,6 +8,7 @@
     "google-protobuf": "^3.10.0",
     "grpc": "^1.24.2",
     "pg": "^7.12.1",
+    "pg-listen": "^1.5.0",
     "pg-query-stream": "^2.0.1",
     "reflect-metadata": "^0.1.13",
     "typeorm": "^0.2.20"
